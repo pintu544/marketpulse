@@ -1,0 +1,9 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+*.db-journal
+.DS_Store
+
+# Built automatically from marketpulse.sql on first run; not committed.
+*.db
