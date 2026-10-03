@@ -186,7 +186,7 @@ function render(d, tool, args) {
       ${d.insight ? `<div class="insight">💡 ${esc(d.insight)}</div>` : ''}`;
     const card = addCard('Growth trends', h, tool, args, prov);
     setTimeout(() => trendChart(id, d.months.slice(-12)), 60);
-  } else if (d.products) {
+  } else if (d.products && d.products[0] && d.products[0].product_id) {
     let h = `<table><tr><th>Product</th><th>Revenue</th><th>Units</th></tr>`;
     d.products.slice(0,6).forEach(p => h += `<tr><td>${esc(p.product_id.slice(0,8))}…</td><td>${money(p.revenue_brl)}</td><td>${p.units_sold}</td></tr>`);
     h += `</table>${d.insight ? `<div class="insight">💡 ${esc(d.insight)}</div>` : ''}`;
