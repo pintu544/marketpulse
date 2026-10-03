@@ -54,6 +54,30 @@ def compare_categories(category_a: str, category_b: str) -> dict:
 
 
 @mcp.tool()
+def browse_products(category: str | None = None, limit: int = 8) -> dict:
+    """Browse the product catalog (fictional brands), optionally by category."""
+    return tools.browse_products(category, limit)
+
+
+@mcp.tool()
+def add_to_cart(sku: str, quantity: int = 1) -> dict:
+    """Add a product to the shopping cart by SKU or name."""
+    return tools.add_to_cart(sku, quantity)
+
+
+@mcp.tool()
+def view_cart() -> dict:
+    """Show the current shopping cart."""
+    return tools.view_cart()
+
+
+@mcp.tool()
+def checkout() -> dict:
+    """Complete the purchase. SIMULATED — no real payment is processed."""
+    return tools.checkout()
+
+
+@mcp.tool()
 def ask_analyst(question: str) -> dict:
     """Ask a free-form market research question; answered by Amazon Bedrock grounded in live data."""
     return tools.ask_analyst(question)

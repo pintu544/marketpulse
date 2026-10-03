@@ -7,7 +7,9 @@ from __future__ import annotations
 
 import json
 
-from . import data, llm_client
+from . import cart as cart_store, catalog as catalog_mod, data, llm_client
+
+DEFAULT_SESSION = "demo-session"
 
 
 def _with_insight(tool_name: str, payload: dict) -> dict:
@@ -193,3 +195,79 @@ def generate_brief(focus: str = "overall market") -> dict:
     except Exception as e:  # noqa: BLE001
         return {"focus": focus, "error": f"LLM unavailable: {str(e)[:200]}",
                 "powered_by": "none"}
+
+
+# ---------------- purchasing workflow (simulated) ----------------
+
+def browse_products(category: str | None = None, limit: int = 8) -> dict:
+    """Browse the fictional product catalog, optionally by category."""
+    items = catalog_mod.browse(category, limit)
+    return _with_insight("browse_products", {
+        "products": [{k: v for k, v in p.items() if k != "real_product_ref"}
+                     for p in items],
+        "note": "Fictional brands for demo; prices grounded in real category averages.",
+    })
+
+
+def add_to_cart(sku: str, quantity: int = 1,
+                session_id: str = DEFAULT_SESSION) -> dict:
+    """Add a product to the shopping cart by SKU or name."""
+    product = catalog_mod.find(sku)
+    if not product:
+        return {"added": False, "error": f"Product '{sku}' not found.",
+                "hint": "Use browse_products to see the catalog."}
+    if quantity < 1:
+        return {"added": False, "error": "Quantity must be at least 1."}
+    state = cart_store.get_cart(session_id)
+    items = state["items"]
+    for it in items:
+        if it["sku"] == product["sku"]:
+            it["quantity"] += quantity
+            break
+    else:
+        items.append({"sku": product["sku"], "brand": product["brand"],
+                      "name": product["name"], "price_brl": product["price_brl"],
+                      "quantity": quantity})
+    backend = cart_store.save_cart(session_id, items)
+    total = sum(i["price_brl"] * i["quantity"] for i in items)
+    return _with_insight("add_to_cart", {
+        "added": True, "product": product["name"], "quantity": quantity,
+        "cart_items": len(items), "cart_total_brl": round(total, 2),
+        "cart_backend": backend,
+    })
+
+
+def view_cart(session_id: str = DEFAULT_SESSION) -> dict:
+    """Show the current shopping cart."""
+    state = cart_store.get_cart(session_id)
+    items = state["items"]
+    total = sum(i["price_brl"] * i["quantity"] for i in items)
+    return {
+        "items": items,
+        "cart_total_brl": round(total, 2),
+        "cart_backend": state["backend"],
+        "empty": not items,
+    }
+
+
+def checkout(session_id: str = DEFAULT_SESSION) -> dict:
+    """Complete the purchase (SIMULATED — no real payment is processed)."""
+    state = cart_store.get_cart(session_id)
+    items = state["items"]
+    if not items:
+        return {"order_placed": False, "error": "Cart is empty.",
+                "simulated": True}
+    total = round(sum(i["price_brl"] * i["quantity"] for i in items), 2)
+    import random
+    order_id = f"MP-{random.randint(100000, 999999)}"
+    cart_store.clear_cart(session_id)
+    payload = {
+        "order_placed": True,
+        "order_id": order_id,
+        "items": items,
+        "total_brl": total,
+        "simulated": True,
+        "note": "SIMULATED purchase for hackathon demo — no payment processed, "
+                "no goods shipped.",
+    }
+    return _with_insight("checkout", payload)

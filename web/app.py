@@ -49,6 +49,20 @@ def route(question: str) -> tuple[str, dict]:
         a = m.group(1).strip().replace(" ", "_")
         b = m.group(2).strip().replace(" ", "_").rstrip("?")
         return "compare_categories", {"category_a": a, "category_b": b}
+    if any(w in q for w in ("checkout", "place order", "complete purchase", "buy now")):
+        return "checkout", {}
+    if any(w in q for w in ("cart", "basket")) and not any(w in q for w in ("add", "put")):
+        return "view_cart", {}
+    m = re.search(r"(?:add|put)\s+(.+?)\s+(?:to|in)\s+(?:cart|basket)", q)
+    if m:
+        item = m.group(1).strip()
+        qm = re.search(r"(\d+)\s+(?:x|units?|pieces?)\b", q)
+        qty = int(qm.group(1)) if qm else 1
+        # strip quantity words from item name
+        item = re.sub(r"^\d+\s+(?:x|units?|pieces?)\s+", "", item).strip()
+        return "add_to_cart", {"sku": item, "quantity": qty}
+    if any(w in q for w in ("browse", "show products", "catalog", "shop for", "looking for")):
+        return "browse_products", {"category": cat, "limit": 6}
     if any(w in q for w in ("brief", "summary report", "market intelligence")):
         return "generate_brief", {"focus": question[:120]}
     if any(w in q for w in ("trend", "growth", "growing", "month over month")):

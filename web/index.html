@@ -213,6 +213,39 @@ function render(d, tool, args) {
   } else if (d.error) {
     addCard('Hmm', `<div class="answer">I hit a snag: ${esc(d.error)}</div>`, tool, args, prov);
     speak('Sorry, I hit a snag.');
+  } else if (d.products && d.products[0] && d.products[0].sku) {
+    // shopping catalog
+    let h = `<table><tr><th>SKU</th><th>Product</th><th>Price</th></tr>`;
+    d.products.slice(0,6).forEach(p => h += `<tr><td>${esc(p.sku)}</td><td><b>${esc(p.brand)}</b> ${esc(p.name)}<br><span style="color:#5f7a99">${esc(p.category)}</span></td><td>${money(p.price_brl)}</td></tr>`);
+    h += `</table><div class="insight">Say "add ${esc(d.products[0].sku)} to cart" to start an order.</div>`;
+    h += d.insight ? `<div class="insight">💡 ${esc(d.insight)}</div>` : '';
+    addCard('Catalog', h, tool, args, prov);
+  } else if (d.items !== undefined && d.cart_total_brl !== undefined && !d.order_placed) {
+    // cart view
+    let h;
+    if (d.empty) { h = `<div class="answer">Your cart is empty. Browse the catalog to add items.</div>`; }
+    else {
+      h = `<table><tr><th>Item</th><th>Qty</th><th>Price</th></tr>`;
+      d.items.forEach(i => h += `<tr><td><b>${esc(i.brand)}</b> ${esc(i.name)}<br><span style="color:#5f7a99">${esc(i.sku)}</span></td><td>${i.quantity}</td><td>${money(i.price_brl * i.quantity)}</td></tr>`);
+      h += `</table><div class="statrow"><div class="stat"><div class="bignum">${money(d.cart_total_brl)}<small>cart total</small></div></div></div>
+            <div class="insight">Say "checkout" to complete your order (simulated).</div>`;
+    }
+    addCard('Shopping cart', h, tool, args, prov);
+  } else if (d.order_placed) {
+    let h = `<div class="statrow"><div class="stat"><div class="bignum">${esc(d.order_id)}<small>order confirmed</small></div></div>
+      <div class="stat"><div class="bignum">${money(d.total_brl)}<small>total</small></div></div></div>
+      <table><tr><th>Item</th><th>Qty</th></tr>`;
+    d.items.forEach(i => h += `<tr><td><b>${esc(i.brand)}</b> ${esc(i.name)}</td><td>${i.quantity}</td></tr>`);
+    h += `</table><div class="insight">⚠️ ${esc(d.note || 'Simulated purchase — no payment processed.')}</div>`;
+    h += d.insight ? `<div class="insight">💡 ${esc(d.insight)}</div>` : '';
+    addCard('Order placed', h, tool, args, prov);
+    speak(`Order ${d.order_id} placed. Total ${d.total_brl} reais. This was a simulated purchase.`);
+  } else if (d.added) {
+    addCard('Added to cart',
+      `<div class="answer">Added <b>${esc(d.product)}</b> × ${d.quantity} — cart now ${money(d.cart_total_brl)} (${d.cart_items} items).</div>
+       ${d.insight ? `<div class="insight">💡 ${esc(d.insight)}</div>` : ''}`,
+      tool, args, prov);
+    speak(`Added ${d.product} to your cart.`);
   } else {
     addCard('Result', `<pre style="font-size:12px">${esc(JSON.stringify(d, null, 1).slice(0, 900))}</pre>`, tool, args, prov);
   }
