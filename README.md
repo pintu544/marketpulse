@@ -1,5 +1,25 @@
 # MarketPulse — a Market Research skill for Alexa+
 
+## 🧭 90-second judge tour
+
+1. Open the live demo: https://web-production-331d9.up.railway.app/ — tap the ring and say **"compare health beauty versus electronics"** → spoken answer + comparison card, tool call shown.
+2. Say **"growth trends for watches gifts"** → live revenue chart rendered from the MCP tool's monthly data.
+3. Say **"browse products"** → fictional catalog; **"add MP-001 to cart"** → cart card; **"checkout"** → simulated order confirmed with order ID. This is the agentic purchasing workflow, not Q&A.
+4. Every answer shows which MCP tool served it (`/api/health` lists all 12 tools live on the Streamable HTTP endpoint).
+5. See [FRICTION_LOG.md](FRICTION_LOG.md) for build friction and [docs/product-feedback.md](docs/product-feedback.md) for per-tool feedback.
+
+## Track alignment (Devpost → implementation → evidence)
+
+| Devpost requirement | How MarketPulse meets it | Evidence |
+|---|---|---|
+| Alexa+ track: MCP server or simulated Alexa+ experience | Self-hosted MCP server (spec 2025-11-25, Streamable HTTP) + simulated Alexa+ device host (voice in/out, display cards) | `src/marketpulse/server.py`, `web/` |
+| Agentic, not a Q&A wrapper | Multi-turn purchasing workflow: browse → add to cart → checkout, with persistent cart state | `src/marketpulse/cart.py`, tools `browse_products`/`add_to_cart`/`view_cart`/`checkout` |
+| Amazon developer tools | Amazon Bedrock (Nova Micro narration) + DynamoDB (cart state, SQLite fallback) | `src/marketpulse/llm_client.py`, `src/marketpulse/cart.py` |
+| Public repo + license | MIT, public on GitHub | `LICENSE` |
+| Demo video < 3 min | 48s, YouTube | Devpost submission |
+| Product feedback | Per tool/API/SDK | `docs/product-feedback.md` |
+| Friction log | Build friction, honest | `FRICTION_LOG.md` |
+
 Built for the **Build, Ship, Shape: Amazon Developer Hackathon** (Alexa+ track + AWS Builder mini-challenge).
 
 MarketPulse is a self-hosted **MCP server** (spec 2025-11-25, Streamable HTTP) that turns Alexa+ into a market research analyst. Ask it about e-commerce markets by voice — *"Alexa, which categories are growing fastest?"* — and it queries 100k+ real Brazilian e-commerce orders, reasons over them with an LLM, and answers in spoken-friendly language.
