@@ -105,6 +105,10 @@ async def index(request):
     return HTMLResponse((HERE / "index.html").read_text())
 
 
+async def shop(request):
+    return HTMLResponse((HERE / "shop.html").read_text())
+
+
 async def health(request):
     try:
         async with Client(MCP_URL) as client:
@@ -115,8 +119,133 @@ async def health(request):
         return JSONResponse({"mcp": "down", "error": str(e)[:200]}, status_code=502)
 
 
+# --- Agentic commerce (PayPal hackathon, T1.3) ---
+
+async def commerce_create_mission(request):
+    from marketpulse.commerce.models import create_mission
+    from marketpulse.commerce.missions import research_and_propose
+
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"error": "invalid JSON"}, status_code=400)
+
+    if not isinstance(body, dict):
+        return JSONResponse({"error": "body must be a JSON object"}, status_code=400)
+
+    query = body.get("query", "")
+    if not isinstance(query, str):
+        return JSONResponse({"error": "query must be a string"}, status_code=400)
+    query = query.strip()
+    if not query:
+        return JSONResponse({"error": "query is required"}, status_code=400)
+
+    max_budget = body.get("maxBudget")
+    if max_budget is not None:
+        try:
+            max_budget = float(max_budget)
+            import math
+            if not math.isfinite(max_budget) or max_budget <= 0:
+                raise ValueError
+        except (ValueError, TypeError):
+            return JSONResponse({"error": "maxBudget must be a positive finite number"}, status_code=400)
+
+    mission = create_mission(query=query, max_budget=max_budget)
+    # Slice 1: synchronous research → proposal
+    research_and_propose(mission)
+    return JSONResponse({"missionId": mission.id, "status": mission.status})
+
+
+async def commerce_get_mission(request):
+    from marketpulse.commerce.models import get_mission
+
+    mission_id = request.path_params["id"]
+    mission = get_mission(mission_id)
+    if mission is None:
+        return JSONResponse({"error": "mission not found"}, status_code=404)
+    return JSONResponse(mission.to_dict())
+
+
+async def commerce_confirm_mission(request):
+    """The human gate (T2.2): approve or decline the proposal.
+
+    Body: { "confirmed": true } → executes the order (status → executing)
+    Body: { "confirmed": false } → marks mission failed cleanly.
+    """
+    from marketpulse.commerce.models import get_mission
+    from marketpulse.commerce.transact import execute_order
+    from marketpulse.commerce.guardrails import GuardrailViolation
+    from marketpulse.commerce.paypal_client import PayPalError
+
+    mission_id = request.path_params["id"]
+    mission = get_mission(mission_id)
+    if mission is None:
+        return JSONResponse({"error": "mission not found"}, status_code=404)
+
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"error": "invalid JSON"}, status_code=400)
+
+    if not isinstance(body, dict) or not isinstance(body.get("confirmed"), bool):
+        return JSONResponse(
+            {"error": "body must be {\"confirmed\": boolean}"}, status_code=400
+        )
+
+    if mission.status != "proposed":
+        return JSONResponse(
+            {"error": f"mission status is {mission.status!r}, must be 'proposed'"},
+            status_code=409,
+        )
+
+    if not body["confirmed"]:
+        mission.status = "failed"
+        mission.log("mission_declined", "human declined the proposal")
+        return JSONResponse({"status": "failed"})
+
+    # Human confirmed — execute the order
+    try:
+        order = execute_order(mission)
+    except GuardrailViolation as e:
+        mission.status = "failed"
+        mission.log("order_blocked", str(e))
+        return JSONResponse({"error": str(e)}, status_code=422)
+    except PayPalError as e:
+        # H1: PayPal failures → 502, mission stays retryable (C1 fix)
+        mission.log("order_failed", f"paypal error: {e}")
+        return JSONResponse(
+            {"error": "payment provider unavailable, safe to retry"},
+            status_code=502,
+        )
+    except KeyError as e:
+        # Missing env credentials
+        return JSONResponse(
+            {"error": "payment not configured"},
+            status_code=503,
+        )
+
+    return JSONResponse({"status": "executing", "order": order})
+
+
+async def commerce_catalog(request):
+    """T2.4: return the fixture catalog (versioned, stable IDs, fixed prices)."""
+    from marketpulse.commerce.missions import load_catalog
+    from marketpulse.commerce.constants import SANDBOX_LABEL, ENVIRONMENT
+
+    return JSONResponse({
+        "environment": ENVIRONMENT,
+        "sandboxLabel": SANDBOX_LABEL,
+        "items": load_catalog(),
+    })
+
+
 app = Starlette(routes=[
     Route("/", index),
+    Route("/shop", shop),
     Route("/api/ask", ask, methods=["POST"]),
     Route("/api/health", health),
+    Route("/api/commerce/mission", commerce_create_mission, methods=["POST"]),
+    Route("/api/commerce/mission/{id}", commerce_get_mission),
+    Route("/api/commerce/mission/{id}/confirm", commerce_confirm_mission, methods=["POST"]),
+    Route("/api/commerce/catalog", commerce_catalog),
 ])

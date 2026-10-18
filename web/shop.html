@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MarketPulse Shop — Agentic Commerce Demo</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, "Segoe UI", Roboto, sans-serif; background: #000;
+         color: #e8eef6; min-height: 100vh; display: flex; flex-direction: column;
+         align-items: center; padding: 24px 16px; }
+  #app { width: min(700px, 96vw); }
+  h1 { font-size: 24px; margin-bottom: 6px; }
+  .sandbox-badge { display: inline-block; background: #f5a623; color: #000;
+                   font-size: 12px; font-weight: 700; padding: 3px 10px;
+                   border-radius: 12px; margin-bottom: 18px; }
+  .card { background: linear-gradient(160deg, #14273f, #0e1c30);
+          border: 1px solid #23405f; border-radius: 16px; padding: 20px;
+          margin-bottom: 16px; }
+  .card h3 { font-size: 15px; color: #7fd0ff; margin-bottom: 12px; }
+  input[type=text], input[type=number] { width: 100%; padding: 12px;
+      border-radius: 10px; border: 1px solid #23405f; background: #0a1526;
+      color: #e8eef6; font-size: 16px; margin-bottom: 10px; }
+  button { padding: 12px 24px; border-radius: 10px; border: none; cursor: pointer;
+           font-size: 15px; font-weight: 600; margin-right: 8px; }
+  .btn-primary { background: #146ef5; color: #fff; }
+  .btn-primary:hover { background: #2b80ff; }
+  .btn-success { background: #1a9e5c; color: #fff; }
+  .btn-danger { background: #c0392b; color: #fff; }
+  button:disabled { opacity: .4; cursor: not-allowed; }
+  #status { font-size: 14px; color: #8fa3bd; margin: 12px 0; min-height: 20px; }
+  .proposal { border-left: 3px solid #7fd0ff; padding-left: 14px; margin: 12px 0; }
+  .proposal .name { font-size: 18px; font-weight: 600; }
+  .proposal .price { font-size: 22px; color: #7fd0ff; margin: 6px 0; }
+  .proposal .reason { font-size: 14px; color: #b9cde6; font-style: italic; }
+  .receipt { background: #0d2a1a; border-color: #1a9e5c; }
+  .receipt .row { display: flex; justify-content: space-between;
+                  padding: 6px 0; border-bottom: 1px solid #1e3a2a; font-size: 14px; }
+  .receipt .row:last-child { border: none; }
+  .audit { font-size: 12px; color: #5f7a99; margin-top: 12px; }
+  .audit div { padding: 3px 0; border-bottom: 1px dotted #1e2a3a; }
+  .hidden { display: none; }
+  #catalog { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+  .cat-item { background: #0a1526; border: 1px solid #23405f; border-radius: 10px;
+              padding: 12px; font-size: 13px; cursor: pointer; }
+  .cat-item:hover { border-color: #7fd0ff; }
+  .cat-item .p { color: #7fd0ff; font-weight: 600; margin-top: 4px; }
+</style>
+</head>
+<body>
+<div id="app">
+  <h1>🛒 MarketPulse Shop</h1>
+  <span class="sandbox-badge">SANDBOX — test money only</span>
+
+  <div class="card">
+    <h3>1. Describe what you want</h3>
+    <input type="text" id="query" placeholder='e.g. "wireless headphones under $80"'>
+    <input type="number" id="budget" placeholder="Max budget (USD, optional)" min="1" step="0.01">
+    <button class="btn-primary" id="btn-search" onclick="createMission()">Find it for me</button>
+    <div id="status"></div>
+  </div>
+
+  <div class="card hidden" id="proposal-card">
+    <h3>2. Agent proposal</h3>
+    <div class="proposal">
+      <div class="name" id="p-name"></div>
+      <div class="price" id="p-price"></div>
+      <div class="reason" id="p-reason"></div>
+    </div>
+    <button class="btn-success" id="btn-confirm" onclick="confirmMission(true)">✅ Buy it</button>
+    <button class="btn-danger" onclick="confirmMission(false)">❌ No thanks</button>
+  </div>
+
+  <div class="card receipt hidden" id="receipt-card">
+    <h3>🧾 Receipt</h3>
+    <div class="row"><span>Item</span><span id="r-item"></span></div>
+    <div class="row"><span>Amount</span><span id="r-amount"></span></div>
+    <div class="row"><span>PayPal Order ID</span><span id="r-order"></span></div>
+    <div class="row"><span>Status</span><span id="r-status"></span></div>
+    <div class="row"><span>Time</span><span id="r-time"></span></div>
+    <div class="audit" id="r-audit"></div>
+  </div>
+
+  <div class="card">
+    <h3>Browse catalog</h3>
+    <div id="catalog"></div>
+  </div>
+</div>
+
+<script>
+let missionId = null;
+
+function setStatus(t) { document.getElementById('status').textContent = t; }
+
+async function createMission() {
+  const query = document.getElementById('query').value.trim();
+  const budgetRaw = document.getElementById('budget').value;
+  if (!query) { setStatus('Please describe what you want.'); return; }
+
+  setStatus('🔍 Agent researching...');
+  document.getElementById('proposal-card').classList.add('hidden');
+  document.getElementById('receipt-card').classList.add('hidden');
+
+  const body = { query };
+  if (budgetRaw) body.maxBudget = parseFloat(budgetRaw);
+
+  const res = await fetch('/api/commerce/mission', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(body),
+  });
+  const data = await res.json();
+  if (!res.ok) { setStatus('Error: ' + (data.error || 'unknown')); return; }
+
+  missionId = data.missionId;
+  await pollMission();
+}
+
+async function pollMission() {
+  // Research is synchronous in Slice 1/2, but poll for forward-compat
+  for (let i = 0; i < 10; i++) {
+    const res = await fetch(`/api/commerce/mission/${missionId}`);
+    const m = await res.json();
+    if (m.status === 'proposed' && m.proposal) { showProposal(m); return; }
+    if (m.status === 'failed') { setStatus('No match found within budget. Try a different query.'); return; }
+    await new Promise(r => setTimeout(r, 500));
+  }
+  setStatus('Timed out waiting for proposal.');
+}
+
+function showProposal(m) {
+  setStatus('Agent found a match:');
+  document.getElementById('p-name').textContent = `${m.proposal.brand} ${m.proposal.name}`;
+  document.getElementById('p-price').textContent = `$${m.proposal.price} ${m.proposal.currency}`;
+  document.getElementById('p-reason').textContent = m.proposal.reason;
+  document.getElementById('proposal-card').classList.remove('hidden');
+}
+
+async function confirmMission(confirmed) {
+  document.getElementById('btn-confirm').disabled = true;
+  setStatus(confirmed ? '⏳ Creating PayPal order...' : 'Declining...');
+
+  const res = await fetch(`/api/commerce/mission/${missionId}/confirm`, {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ confirmed }),
+  });
+  const data = await res.json();
+  document.getElementById('btn-confirm').disabled = false;
+
+  if (!confirmed) {
+    setStatus('Mission declined.');
+    document.getElementById('proposal-card').classList.add('hidden');
+    return;
+  }
+  if (!res.ok) { setStatus('Error: ' + (data.error || 'unknown')); return; }
+
+  // Fetch full mission for receipt + audit log
+  const mres = await fetch(`/api/commerce/mission/${missionId}`);
+  const m = await mres.json();
+  showReceipt(m);
+}
+
+function showReceipt(m) {
+  document.getElementById('proposal-card').classList.add('hidden');
+  setStatus('✅ Order created!');
+  document.getElementById('r-item').textContent = m.proposal.name;
+  document.getElementById('r-amount').textContent = `$${m.order.amount} ${m.order.currency}`;
+  document.getElementById('r-order').textContent = m.order.paypalOrderId;
+  document.getElementById('r-status').textContent = m.order.status;
+  document.getElementById('r-time').textContent = new Date().toLocaleString();
+  // M1: use textContent, never innerHTML — audit entries contain user input
+  const auditDiv = document.getElementById('r-audit');
+  auditDiv.innerHTML = '<b>Audit log:</b>';
+  m.auditLog.forEach(e => {
+    const div = document.createElement('div');
+    div.textContent = `${e.action}: ${e.detail}`;
+    auditDiv.appendChild(div);
+  });
+  document.getElementById('receipt-card').classList.remove('hidden');
+}
+
+async function loadCatalog() {
+  const res = await fetch('/api/commerce/catalog');
+  const data = await res.json();
+  document.getElementById('catalog').innerHTML = data.items.map(i =>
+    `<div class="cat-item" onclick="document.getElementById('query').value='${i.name}';window.scrollTo(0,0)">
+      <div>${i.brand} ${i.name}</div><div class="p">$${i.price}</div>
+    </div>`).join('');
+}
+loadCatalog();
+</script>
+</body>
+</html>
