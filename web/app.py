@@ -152,7 +152,14 @@ async def commerce_create_mission(request):
 
     mission = create_mission(query=query, max_budget=max_budget)
     # Slice 1: synchronous research → proposal
-    research_and_propose(mission)
+    # Defensive: research failures must not 500 mission creation
+    try:
+        research_and_propose(mission)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        mission.log("research_error", f"research failed: {str(e)[:200]}")
+        mission.status = "failed"
     return JSONResponse({"missionId": mission.id, "status": mission.status})
 
 
