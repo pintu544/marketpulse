@@ -28,13 +28,19 @@ _RETRYABLE = {429, 500, 502, 503, 504}
 # URL-breaking chars that httpx can't parse (see ~/AGENTS.md). Route through
 # the local CONNECT forwarder on 127.0.0.1:8888 instead; trust_env=False
 # keeps httpx from choking on the raw proxy env vars.
-_FORWARDER = "http://127.0.0.1:8888"
+# PAYPAL_PROXY env var overrides: set it on the VM if the forwarder is needed.
+# On Azure (or anywhere without the forwarder), leave unset for a direct
+# connection with normal TLS verification.
+_FORWARDER = os.environ.get("PAYPAL_PROXY", "")
 
 
 def _http_client() -> httpx.Client:
-    # verify=False: the egress proxy MITMs TLS with a self-signed cert.
-    # Sandbox traffic only; same pattern as the Playwright setup (AGENTS.md).
-    return httpx.Client(proxy=_FORWARDER, trust_env=False, timeout=20.0, verify=False)
+    if _FORWARDER:
+        # verify=False: the egress proxy MITMs TLS with a self-signed cert.
+        # Sandbox traffic only; same pattern as the Playwright setup (AGENTS.md).
+        return httpx.Client(proxy=_FORWARDER, trust_env=False, timeout=20.0, verify=False)
+    # Direct connection (Azure, etc.) with normal TLS verification.
+    return httpx.Client(trust_env=False, timeout=20.0)
 
 
 class PayPalError(Exception):
