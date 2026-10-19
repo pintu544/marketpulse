@@ -69,12 +69,17 @@ class PayPalClient:
 
     # -- auth -----------------------------------------------------------
     def _mint_token(self) -> str:
-        resp = _http_client().post(
-            f"{self.base_url}/v1/oauth2/token",
-            auth=(self.client_id, self.client_secret),
-            data={"grant_type": "client_credentials"},
-            headers={"Accept": "application/json"},
-        )
+        try:
+            resp = _http_client().post(
+                f"{self.base_url}/v1/oauth2/token",
+                auth=(self.client_id, self.client_secret),
+                data={"grant_type": "client_credentials"},
+                headers={"Accept": "application/json"},
+            )
+        except httpx.TransportError as e:
+            # Network-level failure during token mint — wrap so callers
+            # see PayPalError (retryable / 502) instead of a raw 500.
+            raise PayPalError(f"token mint transport error: {e}") from e
         if resp.status_code != 200:
             raise PayPalError(
                 f"token mint failed: {resp.text[:200]}",
