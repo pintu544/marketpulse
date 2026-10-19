@@ -32,7 +32,8 @@ def _marketpulse_ranked_options(query: str) -> list[dict]:
     """
     try:
         from marketpulse import tools as mp_tools
-    except ImportError:
+    except Exception:
+        # ImportError, FileNotFoundError (missing DB), etc. → degrade gracefully
         return []
 
     try:
