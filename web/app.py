@@ -230,6 +230,15 @@ async def commerce_confirm_mission(request):
             {"error": "payment not configured"},
             status_code=503,
         )
+    except Exception as e:
+        # Catch-all for debugging: log the actual error
+        import traceback
+        traceback.print_exc()
+        mission.log("order_failed", f"unexpected error: {type(e).__name__}: {str(e)[:200]}")
+        return JSONResponse(
+            {"error": f"unexpected: {type(e).__name__}: {str(e)[:200]}"},
+            status_code=500,
+        )
 
     return JSONResponse({"status": "executing", "order": order})
 
