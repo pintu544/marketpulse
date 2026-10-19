@@ -134,7 +134,7 @@ class PayPalClient:
         last_error: PayPalError | None = None
         for attempt in range(_MAX_RETRIES + 1):
             # Refresh headers each attempt (token may have expired)
-            if "headers" in kwargs and callable(kwargs.get("_headers_fn")):
+            if callable(kwargs.get("_headers_fn")):
                 kwargs["headers"] = kwargs.pop("_headers_fn")()
             try:
                 resp = _http_client().request(method, url, **kwargs)
